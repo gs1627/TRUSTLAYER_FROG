@@ -63,6 +63,17 @@ class Settings(BaseSettings):
     webhook_max_attempts: int = Field(default=5, ge=1, le=20)
     webhook_retry_base_seconds: int = Field(default=30, ge=1, le=3600)
 
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_max_output_tokens: int = 1024
+
+    sarvam_api_key: str | None = None
+    sarvam_base_url: str = "https://api.sarvam.ai"
+    sarvam_model: str = "saaras:v2.5"
+    sarvam_timeout_seconds: float = 60.0
+    sarvam_sample_rate: int = 16000
+    sarvam_encoding: str = "audio/pcm"
+
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     max_upload_mb: int = 25
     backend_access_token: str | None = None

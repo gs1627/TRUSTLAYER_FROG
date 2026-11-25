@@ -274,6 +274,17 @@ async def resolve_websocket_principal(websocket: WebSocket) -> AuthPrincipal | N
 
     Access tokens are never read from URL query strings.
     """
+def require_demo_mode() -> None:
+    """Prevent demo-only endpoints from being enabled in production."""
+    if get_settings().app_env == "production":
+        raise HTTPException(
+            status_code=403,
+            detail="This demo-only endpoint is disabled in production",
+        )
+
+
+async def authenticate_websocket(websocket: WebSocket) -> bool:
+    """Validate the first WebSocket JSON frame when a shared token is configured."""
     settings = get_settings()
     has_shared = bool(settings.backend_access_token)
     has_jwt = bool(settings.jwt_secret_key)

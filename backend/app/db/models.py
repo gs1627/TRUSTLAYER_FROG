@@ -444,3 +444,19 @@ class SimulatedTransaction(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
 
     call_session: Mapped["CallSession"] = relationship(back_populates="simulated_transactions")
+    last_provider_event_at: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+
+class DemoTransactionRecord(Base):
+    __tablename__ = "demo_transaction_records"
+
+    action_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    customer_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    call_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    amount_text: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    beneficiary_ref: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="simulated")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

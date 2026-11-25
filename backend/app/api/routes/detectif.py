@@ -11,6 +11,7 @@ from app.core.auth import (
     require_backend_access,
     require_roles,
 )
+from app.api.audio import read_audio
 from app.core.config import get_settings
 from app.core.rate_limit import rate_limit
 from app.db.models import CallSession, SpeakerProfile, utc_now
