@@ -41,6 +41,19 @@ Open `.env` and add the DetectifAI API key:
 DETECTIF_API_KEY=your_key_here
 ```
 
+For transcript intelligence, add the provider keys to `.env`:
+
+```env
+GEMINI_API_KEY=your_gemini_key_here
+SARVAM_API_KEY=your_sarvam_key_here
+```
+
+Gemini and Sarvam are optional for local startup. Without their keys, the related
+services return failed evidence rather than making provider requests. Model names
+and Sarvam audio settings can be overridden with `GEMINI_MODEL`,
+`GEMINI_MAX_OUTPUT_TOKENS`, `SARVAM_MODEL`, `SARVAM_BASE_URL`,
+`SARVAM_TIMEOUT_SECONDS`, `SARVAM_SAMPLE_RATE`, and `SARVAM_ENCODING`.
+
 To configure webhooks, add the endpoint signing secret supplied by the DetectifAI dashboard:
 
 ```env
