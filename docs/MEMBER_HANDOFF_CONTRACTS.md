@@ -80,3 +80,9 @@ Member 3 owns the Trust Engine. Member 1 owns provider transport and session inf
 - The optional `BACKEND_ACCESS_TOKEN` is only a shared development gate, not customer login/RBAC. Do not deploy publicly until proper authentication, authorization, rate limiting and secure deployment configuration are added.
 - The browser WebSocket is a development integration path. Production needs authenticated sessions and allowed-origin validation.
 - No real bank transaction execution is implemented. The transaction interface must use simulated data until authorised integration exists.
+
+## Development-only demo routes
+
+- `POST /api/v1/intelligence/analyze` accepts an audio file, call ID and optional caller-supplied DetectifAI voice evidence. Caller-supplied evidence is untrusted; use synthetic/test data only.
+- `POST /api/v1/transactions/challenges` and `POST /api/v1/transactions/simulate` provide a local demo of policy and one-use challenge checks. Customer IDs and trust decisions are caller-supplied, the challenge token is returned directly to the demo client, and no real transaction is executed.
+- These routes are disabled when `APP_ENV=production`. They are not a substitute for customer authentication, trusted server-side evidence, or an independent approval channel.

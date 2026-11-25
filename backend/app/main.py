@@ -4,7 +4,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import calls, detectif, health, webhooks
+from app.api.routes import calls, detectif, health, intelligence, transactions, webhooks
 from app.core.config import get_settings
 from app.db.session import close_db, init_db
 
@@ -38,6 +38,8 @@ app.include_router(health.router, prefix=settings.api_v1_prefix)
 app.include_router(detectif.router, prefix=settings.api_v1_prefix)
 app.include_router(webhooks.router, prefix=settings.api_v1_prefix)
 app.include_router(calls.router, prefix=settings.api_v1_prefix)
+app.include_router(intelligence.router, prefix=settings.api_v1_prefix)
+app.include_router(transactions.router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/")

@@ -18,6 +18,15 @@ async def require_backend_access(authorization: str | None = Header(default=None
         raise HTTPException(status_code=401, detail="Missing or invalid backend access token")
 
 
+def require_demo_mode() -> None:
+    """Prevent demo-only endpoints from being enabled in production."""
+    if get_settings().app_env == "production":
+        raise HTTPException(
+            status_code=403,
+            detail="This demo-only endpoint is disabled in production",
+        )
+
+
 async def authenticate_websocket(websocket: WebSocket) -> bool:
     """Validate the first WebSocket JSON frame when a shared token is configured."""
     settings = get_settings()

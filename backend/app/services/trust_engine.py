@@ -37,6 +37,7 @@ SENSITIVE_INTENTS = {
     "ACCOUNT_INFORMATION_REQUEST",
 }
 HOLD_INTENTS = {"OTP_REQUEST", "CREDENTIAL_RESET"}
+RECOGNIZED_INTENTS = SENSITIVE_INTENTS | {"BALANCE_ENQUIRY", "GENERAL_ENQUIRY"}
 
 
 def _latest(items: Iterable[EvidenceItem], check_type: str) -> EvidenceItem | None:
@@ -134,6 +135,14 @@ class TrustEngine:
         if not isinstance(risk_indicators, list):
             risk_indicators = []
         credential_request = bool(context_details.get("credential_request"))
+        if intent not in RECOGNIZED_INTENTS:
+            return TrustDecision(
+                decision="VERIFY",
+                risk_level="HIGH",
+                reasons=["Caller intent is unknown or not recognized by policy"],
+                intent=intent,
+            )
+
         sensitive = (
             intent in SENSITIVE_INTENTS
             or credential_request
