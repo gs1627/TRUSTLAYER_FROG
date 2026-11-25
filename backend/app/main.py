@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import calls, detectif, health, webhooks
 from app.core.config import get_settings
+from app.core.errors import AppAPIError, handle_app_api_error
 from app.db.session import close_db, init_db
 
 settings = get_settings()
@@ -25,6 +26,7 @@ app = FastAPI(
     description="Member 1 backend foundation for TRUSTLAYER.",
     lifespan=lifespan,
 )
+app.add_exception_handler(AppAPIError, handle_app_api_error)
 
 app.add_middleware(
     CORSMiddleware,

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.config import Settings, get_settings
 from app.db import session as db_session
 from app.main import app
+from app.services.events import reset_event_publisher
 
 _ISOLATED_ENV_VARS = (
     "APP_NAME",
@@ -34,11 +35,13 @@ def isolated_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setitem(Settings.model_config, "env_file", None)
     get_settings.cache_clear()
+    reset_event_publisher()
     try:
         yield
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()
+        reset_event_publisher()
 
 
 @pytest.fixture
