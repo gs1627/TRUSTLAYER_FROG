@@ -7,8 +7,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings, get_settings
+from app.core.rate_limit import reset_rate_limiters
 from app.db import session as db_session
 from app.main import app
+from app.services.events import reset_event_publisher
 
 _ISOLATED_ENV_VARS = (
     "APP_NAME",
@@ -18,12 +20,38 @@ _ISOLATED_ENV_VARS = (
     "DATABASE_URL",
     "DETECTIF_API_KEY",
     "DETECTIF_BASE_URL",
+    "DETECTIF_CONNECT_TIMEOUT_SECONDS",
     "DETECTIF_TIMEOUT_SECONDS",
+    "DETECTIF_MAX_RETRIES",
+    "DETECTIF_RETRY_BACKOFF_SECONDS",
+    "DETECTIF_WS_MAX_CONNECTIONS_PER_CALL",
     "DETECTIF_WEBHOOK_SECRET",
+    "DETECTIF_WEBHOOK_SECRET_PREVIOUS",
     "WEBHOOK_TOLERANCE_SECONDS",
+    "WEBHOOK_MAX_ATTEMPTS",
+    "WEBHOOK_RETRY_BASE_SECONDS",
     "CORS_ORIGINS",
     "MAX_UPLOAD_MB",
     "BACKEND_ACCESS_TOKEN",
+    "JWT_SECRET_KEY",
+    "JWT_ALGORITHM",
+    "JWT_ISSUER",
+    "JWT_AUDIENCE",
+    "JWT_ACCESS_TOKEN_TTL_SECONDS",
+    "RATE_LIMIT_ENABLED",
+    "RATE_LIMIT_WINDOW_SECONDS",
+    "RATE_LIMIT_AUTH_REQUESTS",
+    "RATE_LIMIT_CALL_CREATE_REQUESTS",
+    "RATE_LIMIT_EVIDENCE_REQUESTS",
+    "RATE_LIMIT_ASSESSMENT_REQUESTS",
+    "RATE_LIMIT_WEBHOOK_REQUESTS",
+    "RATE_LIMIT_WS_CONNECT_REQUESTS",
+    "RATE_LIMIT_WS_MESSAGES_PER_WINDOW",
+    "TX_POLICY_MIN_ALLOW_TRUST_SCORE",
+    "TX_POLICY_BLOCK_TRUST_SCORE",
+    "TX_POLICY_HIGH_VALUE_AMOUNT",
+    "TX_POLICY_REQUIRE_FINAL_DEEPFAKE",
+    "TX_POLICY_REQUIRE_FINAL_VERIFICATION_WHEN_CONFIGURED",
 )
 
 
@@ -34,11 +62,15 @@ def isolated_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setitem(Settings.model_config, "env_file", None)
     get_settings.cache_clear()
+    reset_event_publisher()
+    reset_rate_limiters()
     try:
         yield
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()
+        reset_event_publisher()
+        reset_rate_limiters()
 
 
 @pytest.fixture

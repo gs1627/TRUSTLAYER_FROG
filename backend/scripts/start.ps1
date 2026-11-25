@@ -70,7 +70,7 @@ $python = ".\.venv\Scripts\python.exe"
 
 $needsInstall = $venvCreated -or $SyncDependencies.IsPresent
 if (-not $needsInstall) {
-    $packageCheckCode = "import importlib.metadata as m; [m.version(p) for p in ('fastapi','uvicorn','httpx','websockets','pydantic-settings','sqlalchemy','aiosqlite','asyncpg','python-multipart','pytest','pytest-asyncio')]"
+    $packageCheckCode = "import importlib.metadata as m; [m.version(p) for p in ('fastapi','uvicorn','httpx','websockets','pydantic-settings','sqlalchemy','alembic','aiosqlite','asyncpg','python-multipart','pytest','pytest-asyncio')]"
     if (-not (Invoke-NativeCheck -Exe $python -Arguments @("-c", $packageCheckCode))) {
         $needsInstall = $true
     }

@@ -1,8 +1,9 @@
+from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -50,10 +51,17 @@ class Settings(BaseSettings):
 
     detectif_api_key: str | None = None
     detectif_base_url: str = "https://platform.detectif.ai"
-    detectif_timeout_seconds: float = 300.0
+    detectif_connect_timeout_seconds: float = Field(default=10.0, gt=0.0)
+    detectif_timeout_seconds: float = Field(default=300.0, gt=0.0)
+    detectif_max_retries: int = Field(default=2, ge=0, le=5)
+    detectif_retry_backoff_seconds: float = Field(default=0.5, ge=0.0, le=30.0)
+    detectif_ws_max_connections_per_call: int = Field(default=2, ge=1, le=20)
 
     detectif_webhook_secret: str | None = None
-    webhook_tolerance_seconds: int = 300
+    detectif_webhook_secret_previous: str | None = None
+    webhook_tolerance_seconds: int = Field(default=300, ge=30, le=3600)
+    webhook_max_attempts: int = Field(default=5, ge=1, le=20)
+    webhook_retry_base_seconds: int = Field(default=30, ge=1, le=3600)
 
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"
@@ -69,6 +77,28 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     max_upload_mb: int = 25
     backend_access_token: str | None = None
+
+    jwt_secret_key: str | None = None
+    jwt_algorithm: str = "HS256"
+    jwt_issuer: str = "trustlayer-backend"
+    jwt_audience: str = "trustlayer-api"
+    jwt_access_token_ttl_seconds: int = Field(default=3600, ge=60, le=86400)
+
+    rate_limit_enabled: bool = True
+    rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
+    rate_limit_auth_requests: int = Field(default=30, ge=1)
+    rate_limit_call_create_requests: int = Field(default=30, ge=1)
+    rate_limit_evidence_requests: int = Field(default=120, ge=1)
+    rate_limit_assessment_requests: int = Field(default=60, ge=1)
+    rate_limit_webhook_requests: int = Field(default=300, ge=1)
+    rate_limit_ws_connect_requests: int = Field(default=20, ge=1)
+    rate_limit_ws_messages_per_window: int = Field(default=2400, ge=1)
+
+    tx_policy_min_allow_trust_score: float = Field(default=0.75, ge=0.0, le=1.0)
+    tx_policy_block_trust_score: float = Field(default=0.35, ge=0.0, le=1.0)
+    tx_policy_high_value_amount: Decimal = Field(default=Decimal("50000.00"), gt=Decimal("0"))
+    tx_policy_require_final_deepfake: bool = True
+    tx_policy_require_final_verification_when_configured: bool = True
 
     model_config = SettingsConfigDict(
         env_file=DEFAULT_ENV_FILE,
