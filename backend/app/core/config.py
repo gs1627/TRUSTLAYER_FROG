@@ -1,7 +1,43 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+DEFAULT_ENV_FILE = BACKEND_DIR / ".env"
+
+
+def normalize_database_url(url: str, *, base_dir: Path = BACKEND_DIR) -> str:
+    """Normalize PostgreSQL URLs for asyncpg and anchor relative SQLite file paths."""
+    cleaned = url.strip()
+    if not cleaned:
+        raise ValueError("DATABASE_URL cannot be empty")
+
+    if cleaned.startswith("postgres://"):
+        return "postgresql+asyncpg://" + cleaned[len("postgres://"):]
+    if cleaned.startswith("postgresql://"):
+        return "postgresql+asyncpg://" + cleaned[len("postgresql://"):]
+
+    for prefix in ("sqlite+aiosqlite:///", "sqlite:///"):
+        if cleaned.startswith(prefix):
+            raw_path = cleaned[len(prefix):]
+            path_part, sep, query_part = raw_path.partition("?")
+            if (
+                not path_part
+                or path_part == ":memory:"
+                or path_part.startswith("file:")
+                or path_part.startswith("/")
+                or path_part.startswith("\\")
+                or (len(path_part) >= 2 and path_part[1] == ":")
+                or Path(path_part).is_absolute()
+            ):
+                return cleaned
+            resolved = (base_dir / path_part).resolve().as_posix()
+            return f"{prefix}{resolved}{sep}{query_part}"
+
+    return cleaned
 
 
 class Settings(BaseSettings):
@@ -24,11 +60,18 @@ class Settings(BaseSettings):
     backend_access_token: str | None = None
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=DEFAULT_ENV_FILE,
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
     )
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _normalize_database_url(cls, value: str) -> str:
+        if not isinstance(value, str):
+            raise TypeError("DATABASE_URL must be a string")
+        return normalize_database_url(value)
 
     @property
     def cors_origin_list(self) -> list[str]:
