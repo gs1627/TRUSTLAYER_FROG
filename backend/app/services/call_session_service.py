@@ -19,6 +19,7 @@ class CallSessionService:
         *,
         status: str | None = None,
         speaker_id: str | None = None,
+        owner_id: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[CallSession], int]:
@@ -27,6 +28,8 @@ class CallSessionService:
             conditions.append(CallSession.status == status)
         if speaker_id is not None:
             conditions.append(CallSession.speaker_id == speaker_id)
+        if owner_id is not None:
+            conditions.append(CallSession.owner_id == owner_id)
 
         where_clause = and_(*conditions) if conditions else None
 

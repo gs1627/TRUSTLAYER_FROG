@@ -96,14 +96,14 @@ def test_fresh_sqlite_migration_upgrade_downgrade_and_schema_parity(tmp_path: Pa
                 "evidence_items",
                 "trust_assessments",
                 "trust_assessment_evidence",
+                "simulated_transactions",
             }.issubset(tables)
-            # Speculative tables deferred to later phases must NOT exist
+            # Speculative tables not in scope must NOT exist
             assert "users" not in tables
             assert "audit_logs" not in tables
-            assert "simulated_transactions" not in tables
 
             rev = MigrationContext.configure(conn).get_current_revision()
-            assert rev == "0002_priority2_schema"
+            assert rev == "0003_priority4_to_6_schema"
 
             # Verify zero schema drift between models.py and migrated DB
             mc = MigrationContext.configure(
@@ -113,7 +113,12 @@ def test_fresh_sqlite_migration_upgrade_downgrade_and_schema_parity(tmp_path: Pa
             diffs = compare_metadata(mc, Base.metadata)
             assert diffs == []
 
-        # Verify downgrade back to 0001 and upgrade back to head
+        # Verify downgrade back to 0002, then 0001, and upgrade back to head
+        command.downgrade(cfg, "0002_priority2_schema")
+        with sync_engine.connect() as conn:
+            assert "simulated_transactions" not in set(inspect(conn).get_table_names())
+            assert MigrationContext.configure(conn).get_current_revision() == "0002_priority2_schema"
+
         command.downgrade(cfg, "0001_initial_priority1")
         with sync_engine.connect() as conn:
             tables_after_down = set(inspect(conn).get_table_names())
@@ -121,7 +126,7 @@ def test_fresh_sqlite_migration_upgrade_downgrade_and_schema_parity(tmp_path: Pa
 
         command.upgrade(cfg, "head")
         with sync_engine.connect() as conn:
-            assert MigrationContext.configure(conn).get_current_revision() == "0002_priority2_schema"
+            assert MigrationContext.configure(conn).get_current_revision() == "0003_priority4_to_6_schema"
     finally:
         sync_engine.dispose()
 
@@ -335,7 +340,7 @@ async def test_complete_priority2_schema_without_version_row_adopts_head(tmp_pat
         assert mode == "adopted_head"
         async with db_session.engine.connect() as conn:
             rev = await conn.run_sync(lambda sc: MigrationContext.configure(sc).get_current_revision())
-            assert rev == "0002_priority2_schema"
+            assert rev == "0003_priority4_to_6_schema"
     finally:
         await db_session.close_db()
         db_session.set_database_url("sqlite+aiosqlite:///:memory:")
@@ -402,6 +407,6 @@ async def test_concurrent_migration_startup_in_process_and_multiprocess(tmp_path
     sync_engine = create_engine(f"sqlite:///{mp_db.as_posix()}")
     try:
         with sync_engine.connect() as conn:
-            assert MigrationContext.configure(conn).get_current_revision() == "0002_priority2_schema"
+            assert MigrationContext.configure(conn).get_current_revision() == "0003_priority4_to_6_schema"
     finally:
         sync_engine.dispose()

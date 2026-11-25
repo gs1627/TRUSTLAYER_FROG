@@ -21,6 +21,7 @@ from app.core.config import BACKEND_DIR, get_settings, normalize_database_url
 
 ALEMBIC_INI_PATH = BACKEND_DIR / "alembic.ini"
 PRIORITY1_REVISION = "0001_initial_priority1"
+PRIORITY2_REVISION = "0002_priority2_schema"
 _PG_MIGRATION_LOCK_ID = 6075996008259518809  # Deterministic 64-bit signed key for TRUSTLAYER
 
 _LOOP_LOCKS: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock] = (
@@ -153,6 +154,38 @@ _PARTIAL_P2_TABLES = (
     "trust_assessments",
     "trust_assessment_evidence",
 )
+
+_PRIORITY3_PLUS_EXTRA_COLUMNS: dict[str, set[str]] = {
+    "webhook_events": {"call_id", "attempt_count", "last_attempt_at", "next_retry_at", "dead_lettered_at"},
+    "speaker_profiles": {"owner_id"},
+    "call_sessions": {"owner_id"},
+    "provider_operations": {
+        "correlation_id",
+        "retry_count",
+        "error_code",
+        "error_message",
+        "failure_details",
+        "started_at",
+        "completed_at",
+    },
+    "simulated_transactions": {
+        "transaction_id",
+        "call_id",
+        "assessment_id",
+        "actor_subject",
+        "action_type",
+        "amount",
+        "currency",
+        "recipient_ref",
+        "notes",
+        "decision",
+        "policy_reasons",
+        "evidence_ids",
+        "policy_version",
+        "simulated",
+        "created_at",
+    },
+}
 
 
 def _get_loop_lock() -> asyncio.Lock:
@@ -361,8 +394,23 @@ def adopt_or_upgrade_sync(
         has_all_p2_tables = set(_PRIORITY2_COLUMNS).issubset(tables)
         if has_all_p2_tables and "checks_mode" in cs_cols and "processed_at" in wh_cols:
             _verify_complete_priority2_schema(inspector, tables)
-            command.stamp(cfg, head_rev or "head")
-            return "adopted_head"
+            if "simulated_transactions" in tables:
+                tx_cols = {col["name"] for col in inspector.get_columns("simulated_transactions")}
+                if _PRIORITY3_PLUS_EXTRA_COLUMNS["simulated_transactions"].issubset(tx_cols):
+                    for tbl in ("webhook_events", "speaker_profiles", "call_sessions", "provider_operations"):
+                        extra = _PRIORITY3_PLUS_EXTRA_COLUMNS[tbl]
+                        present = {c["name"] for c in inspector.get_columns(tbl)}
+                        missing_extra = sorted(extra - present)
+                        if missing_extra:
+                            raise RuntimeError(
+                                f"Table '{tbl}' is missing required migration columns {missing_extra}; refusing to stamp."
+                            )
+                    command.stamp(cfg, head_rev or "head")
+                    return "adopted_head"
+                raise RuntimeError("Table 'simulated_transactions' is missing required columns; refusing to stamp.")
+            command.stamp(cfg, PRIORITY2_REVISION)
+            command.upgrade(cfg, "head")
+            return "adopted_and_upgraded"
 
         command.stamp(cfg, PRIORITY1_REVISION)
         command.upgrade(cfg, "head")

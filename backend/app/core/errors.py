@@ -43,4 +43,8 @@ async def handle_app_api_error(_request: Request, exc: AppAPIError) -> JSONRespo
             details=exc.details,
         ),
     )
-    return JSONResponse(status_code=exc.status_code, content=body.model_dump(mode="json"))
+    headers: dict[str, str] = {}
+    retry_after = exc.details.get("retry_after_seconds") if isinstance(exc.details, dict) else None
+    if exc.status_code == 429 and isinstance(retry_after, (int, float)):
+        headers["Retry-After"] = str(max(1, int(retry_after)))
+    return JSONResponse(status_code=exc.status_code, content=body.model_dump(mode="json"), headers=headers)

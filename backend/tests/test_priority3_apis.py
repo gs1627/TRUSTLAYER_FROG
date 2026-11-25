@@ -485,9 +485,18 @@ def test_websocket_callback_normalizes_stream_messages_with_mocked_relay(
 ):
     from app.api.routes import calls as calls_route
 
-    async def fake_relay(*, browser_ws, call_id, speaker_id, on_provider_message=None):
+    async def fake_relay(
+        *,
+        browser_ws,
+        call_id,
+        speaker_id,
+        checks_mode="deepfake,verify",
+        consent_confirmed=False,
+        on_provider_message=None,
+    ):
         assert call_id == "CALL_WS_P3"
         assert speaker_id == "SPK_WS_P3"
+        assert checks_mode == "deepfake,verify"
         assert on_provider_message is not None
         for msg in (
             {"type": "ready", "stream_id": "str_ws_p3"},

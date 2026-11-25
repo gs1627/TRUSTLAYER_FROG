@@ -34,6 +34,8 @@ class ProviderOperationResponse(BaseModel):
     operation: str
     request_id: str | None = None
     operation_id: str | None = None
+    correlation_id: str | None = None
+    status: str | None = None
     raw: dict[str, Any]
 
 
@@ -41,6 +43,8 @@ class WebhookAcceptedResponse(BaseModel):
     accepted: bool = True
     duplicate: bool = False
     delivery_id: str
+    status: str | None = None
+    call_id: str | None = None
 
 
 class ErrorDetail(BaseModel):
@@ -86,6 +90,7 @@ class CallSessionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     call_id: str
+    owner_id: str | None = None
     speaker_id: str | None = None
     checks_mode: ChecksMode = "deepfake,verify"
     consent_confirmed: bool = False
@@ -133,6 +138,7 @@ class SpeakerProfileRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     speaker_id: str
+    owner_id: str | None = None
     display_name: str | None = None
     consent_confirmed: bool
     consent_recorded_at: datetime | None = None
@@ -155,9 +161,16 @@ class ProviderOperationRead(BaseModel):
     operation_id: str | None = None
     stream_id: str | None = None
     idempotency_key: str | None = None
+    correlation_id: str | None = None
     status: str
+    retry_count: int = 0
     credits: int | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+    failure_details: dict[str, Any] | None = None
     raw_response: dict[str, Any] | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -346,7 +359,9 @@ class SimulatedTransactionRequest(BaseModel):
 
 
 class SimulatedTransactionResponse(BaseModel):
-    """Proposed simulated transaction evaluation response contract."""
+    """Persisted simulated transaction evaluation response contract."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     transaction_id: str
     call_id: str
@@ -356,5 +371,90 @@ class SimulatedTransactionResponse(BaseModel):
     currency: str
     decision: TrustRecommendedAction
     policy_reasons: list[str] = Field(default_factory=list)
+    evidence_ids: list[str] = Field(default_factory=list)
+    policy_version: str | None = None
     simulated: Literal[True] = True
     created_at: datetime
+
+
+AuthRole = Literal["admin", "service", "operator", "user"]
+
+
+class AuthTokenRequest(BaseModel):
+    """Request to mint a short-lived signed JWT using backend service credentials."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str = Field(min_length=1, max_length=128)
+    role: AuthRole = "user"
+    scopes: list[str] = Field(default_factory=list)
+    expires_in_seconds: int | None = Field(default=None, ge=60, le=86400)
+
+
+class AuthTokenResponse(BaseModel):
+    """Issued JWT bearer token metadata."""
+
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_in: int
+    subject: str
+    role: AuthRole
+    scopes: list[str] = Field(default_factory=list)
+
+
+class AuthPrincipalRead(BaseModel):
+    """Resolved authentication principal for the current request."""
+
+    subject: str
+    role: str
+    auth_type: str
+    scopes: list[str] = Field(default_factory=list)
+
+
+class WebhookEventRead(BaseModel):
+    """Webhook delivery lifecycle and reconciliation record."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    delivery_id: str
+    event_id: str | None = None
+    event_type: str
+    call_id: str | None = None
+    status: str
+    attempt_count: int = 1
+    processing_error: str | None = None
+    event_created_at: datetime | None = None
+    received_at: datetime
+    last_attempt_at: datetime | None = None
+    next_retry_at: datetime | None = None
+    processed_at: datetime | None = None
+    dead_lettered_at: datetime | None = None
+
+
+class PaginatedWebhookEventsResponse(BaseModel):
+    """Paginated list of webhook delivery records."""
+
+    items: list[WebhookEventRead]
+    total: int = Field(ge=0)
+    limit: int = Field(ge=1)
+    offset: int = Field(ge=0)
+
+
+class PaginatedProviderOperationsResponse(BaseModel):
+    """Paginated list of tracked provider operations."""
+
+    items: list[ProviderOperationRead]
+    total: int = Field(ge=0)
+    limit: int = Field(ge=1)
+    offset: int = Field(ge=0)
+
+
+class WebhookReconcileResponse(BaseModel):
+    """Summary of webhook reconciliation execution."""
+
+    attempted: int = 0
+    processed: int = 0
+    still_unmatched: int = 0
+    failed: int = 0
+    dead_lettered: int = 0

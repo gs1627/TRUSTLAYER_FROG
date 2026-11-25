@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     JSON,
     Integer,
+    Numeric,
     String,
     Text,
     TypeDecorator,
@@ -76,12 +77,17 @@ class WebhookEvent(Base):
     delivery_id: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
     event_id: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
     event_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    call_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     event_created_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    status: Mapped[str] = mapped_column(String(30), nullable=False, default="received")
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="received", index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     received_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    next_retry_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True, index=True)
     processed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    dead_lettered_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 
 class SpeakerProfile(Base):
@@ -91,6 +97,7 @@ class SpeakerProfile(Base):
     )
 
     speaker_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     display_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     consent_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     consent_recorded_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
@@ -125,6 +132,7 @@ class CallSession(Base):
     )
 
     call_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    owner_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     speaker_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     checks_mode: Mapped[str] = mapped_column(
         String(32),
@@ -167,6 +175,11 @@ class CallSession(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    simulated_transactions: Mapped[list["SimulatedTransaction"]] = relationship(
+        back_populates="call_session",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     speaker_profile: Mapped["SpeakerProfile | None"] = relationship(
         primaryjoin=lambda: foreign(CallSession.speaker_id) == SpeakerProfile.speaker_id,
         viewonly=True,
@@ -177,6 +190,12 @@ class ProviderOperation(Base):
     __tablename__ = "provider_operations"
     __table_args__ = (
         UniqueConstraint("operation_id", name="uq_provider_operations_operation_id"),
+        UniqueConstraint(
+            "provider",
+            "operation_type",
+            "idempotency_key",
+            name="uq_provider_operations_idempotency",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -198,9 +217,16 @@ class ProviderOperation(Base):
     operation_id: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
     stream_id: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    failure_details: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     raw_response: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime(),
@@ -369,3 +395,52 @@ class TrustAssessmentEvidence(Base):
         back_populates="assessment_links",
         overlaps="evidence_items,evidence_links,assessment",
     )
+
+
+class SimulatedTransaction(Base):
+    """Persisted simulated transaction policy evaluation record (no real banking execution)."""
+
+    __tablename__ = "simulated_transactions"
+    __table_args__ = (
+        CheckConstraint(
+            "action_type IN ('fund_transfer', 'beneficiary_add', 'credential_reset', 'limit_change')",
+            name="ck_simulated_transactions_action_type",
+        ),
+        CheckConstraint("amount > 0", name="ck_simulated_transactions_amount_positive"),
+        CheckConstraint(
+            "decision IN ('allow', 'step_up_verify', 'hold', 'block')",
+            name="ck_simulated_transactions_decision",
+        ),
+    )
+
+    transaction_id: Mapped[str] = mapped_column(
+        String(64),
+        primary_key=True,
+        default=lambda: f"tx_{uuid.uuid4().hex}",
+    )
+    call_id: Mapped[str] = mapped_column(
+        String(128),
+        ForeignKey("call_sessions.call_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    assessment_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("trust_assessments.assessment_id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    actor_subject: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    action_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    amount: Mapped[Any] = mapped_column(Numeric(14, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False)
+    recipient_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    decision: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    policy_reasons: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    evidence_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    policy_version: Mapped[str] = mapped_column(String(32), nullable=False, default="policy-v1")
+    simulated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+
+    call_session: Mapped["CallSession"] = relationship(back_populates="simulated_transactions")
