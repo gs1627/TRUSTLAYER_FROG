@@ -11,6 +11,7 @@ FastAPI backend foundation for the TRUSTLAYER Track 03 project.
 - DetectifAI webhook receiver with raw-body HMAC-SHA256 verification and 5-minute timestamp tolerance.
 - Webhook delivery deduplication and basic call-session state updates.
 - Shared provider-neutral `EvidenceItem` schema for coordination with Member 3.
+- Development-only AI analysis and simulated transaction routes; these are disabled in production.
 - Basic tests for health and webhook signature validation.
 
 ## Important limitations in this first milestone
@@ -22,6 +23,7 @@ FastAPI backend foundation for the TRUSTLAYER Track 03 project.
 - Webhook events are signature-checked and persisted. A durable worker and complete cross-channel event reconciliation are later tasks.
 - Audio duration and speech-quality requirements are enforced by DetectifAI; test with recordings meeting the current provider documentation and hackathon account limits.
 - Do not store real customer recordings during development. The provider's own retention rules still apply to uploaded/enrolled audio.
+- Demo intelligence and transaction routes accept caller-supplied evidence/identity and are not safe for real banking use. They are disabled when `APP_ENV=production`.
 
 ## Windows PowerShell setup
 
@@ -93,6 +95,16 @@ pytest -q
 - `POST /api/v1/webhooks/detectifai`
 - `POST /api/v1/calls/sessions`
 - `WS /api/v1/calls/ws/{call_id}`
+
+## Development-only AI and transaction demo routes
+
+These routes are for local integration/testing only and return an explicit demo-only warning. They are disabled when `APP_ENV=production`. The routes accept caller-supplied voice evidence, trust decisions, and customer IDs, so none of those inputs prove identity or authorization.
+
+- `POST /api/v1/intelligence/analyze` — multipart `file`, `call_id`, and optional `voice_evidence_json` (a JSON array containing only DetectifAI deepfake/speaker evidence). Calls Sarvam/Gemini when configured and returns the transcript, evidence, and Trust Engine decision. Evidence passed by the caller is untrusted; only use synthetic or test data.
+- `POST /api/v1/transactions/challenges` — creates a short-lived, one-use approval challenge for a policy-approved sensitive action on an existing call session. The response includes the demo token; this is not delivery through an independent trusted banking channel.
+- `POST /api/v1/transactions/simulate` — validates policy and any challenge, then records a simulated action. It never executes a real financial operation.
+
+Configure `BACKEND_ACCESS_TOKEN` before exposing these endpoints through a development tunnel. Do not send real customer identity, audio, or transaction data.
 
 Enrollment requires `consent_confirmed=true` and a 15–60 second recording containing at least 10 seconds of speech. Verification requires a 3–60 second recording containing at least 2 seconds of speech. The DetectifAI API may return provider-specific validation and credit errors.
 
